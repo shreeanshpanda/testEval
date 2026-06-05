@@ -5,11 +5,12 @@ All site config lives in config.json (same folder as app.py).
 That's the only file you ever need to edit.
 """
 
-import os, json
+import os, json, socket
 from functools import wraps
 from flask import (Flask, jsonify, request, render_template,
                    abort, session, redirect, url_for)
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
 from datetime import datetime
 
 # ── Load config.json ─────────────────────────────────────────────────────────
@@ -22,7 +23,30 @@ def load_config():
 
 cfg = load_config()
 
-DATABASE_URI = cfg["database"]["uri"]
+# ── Resolve URI — force IPv4 for Supabase on IPv6-broken hosts ───────────────
+def ipv4_uri(uri: str) -> str:
+    """
+    Replace the hostname in a DB URI with its IPv4 address.
+    Supabase returns an IPv6 address on some resolvers;
+    this guarantees we always connect over IPv4.
+    """
+    try:
+        from urllib.parse import urlparse, urlunparse
+        parsed = urlparse(uri)
+        hostname = parsed.hostname
+        # getaddrinfo with AF_INET forces IPv4 only
+        results = socket.getaddrinfo(hostname, parsed.port or 5432,
+                                     socket.AF_INET, socket.SOCK_STREAM)
+        ipv4 = results[0][4][0]
+        # Rebuild netloc with IPv4
+        netloc = f"{parsed.username}:{parsed.password}@{ipv4}:{parsed.port or 5432}"
+        return urlunparse(parsed._replace(netloc=netloc))
+    except Exception as e:
+        print(f"[WARN] IPv4 resolution failed ({e}), using original URI")
+        return uri
+
+raw_uri      = cfg["database"]["uri"]
+DATABASE_URI = ipv4_uri(raw_uri)
 SECRET_KEY   = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 
 # ── App setup ────────────────────────────────────────────────────────────────
@@ -30,6 +54,15 @@ app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"]        = DATABASE_URI
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"]                     = SECRET_KEY
+# Pool settings suitable for containers / Supabase
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_pre_ping":    True,   # test connection before use
+    "pool_recycle":     300,    # recycle connections every 5 min
+    "connect_args": {
+        "sslmode":         "require",
+        "connect_timeout": 10,
+    },
+}
 
 db = SQLAlchemy(app)
 
@@ -63,9 +96,11 @@ class TestEntry(db.Model):
             "notes":  self.notes or "",
         }
 
+# ── Auto-create tables ────────────────────────────────────────────────────────
 with app.app_context():
     db.create_all()
-    print(f"[DB] Connected → {DATABASE_URI}")
+    print(f"[DB] Connected → {cfg['database']['uri']}")
+    print(f"[DB] Tables ready.")
 
 # ── Auth helper ───────────────────────────────────────────────────────────────
 def login_required(f):
