@@ -1,0 +1,19 @@
+{
+  "site": {
+    "title": "Test Evaluations",
+    "tagline": "Performance Intelligence · JEE Dashboard",
+    "favicon": "favicon.ico"
+  },
+  "student": {
+    "name": "Shreeansh Panda",
+    "batch": "EXCEL 2027 JEE",
+    "institute": "Unacademy"
+  },
+  "auth": {
+    "username": "shreeanshpanda",
+    "password": "Shreeansh@5965"
+  },
+  "database": {
+    "uri": "postgresql://postgres:shreeanshtesteval@db.biunqlpkvmkedoeyypin.supabase.co:5432/postgres"
+  }
+}

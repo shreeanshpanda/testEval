@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>{{ cfg.site.title }} — {{ cfg.student.name }}</title>
+<link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=JetBrains+Mono:wght@300;400;600&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent: #f5a623;
+    --accent2: #e8c547;
+    --minor: #4fc3f7;
+    --major: #ef5350;
+    --text: #e8dcc8;
+    --muted: #6b7a99;
+    --grid: rgba(245,166,35,0.06);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Crimson Pro', serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 59px, var(--grid) 60px),
+      repeating-linear-gradient(90deg, transparent, transparent 59px, var(--grid) 60px);
+  }
+
+  /* ── HEADER ── */
+  header {
+    padding: 1.4rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(10,14,26,0.95);
+    backdrop-filter: blur(12px);
+    flex-wrap: wrap;
+  }
+  .header-left { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+  .logo-main {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(1.2rem, 4vw, 1.75rem); font-weight: 900; letter-spacing: -0.02em;
+    color: var(--accent); line-height: 1;
+  }
+  .logo-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(0.5rem, 1.5vw, 0.6rem); color: var(--muted); letter-spacing: 0.15em;
+    text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* Credential badge */
+  .cred-badge {
+    display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.55rem 1rem;
+  }
+  .cred-item { display: flex; flex-direction: column; gap: 0.05rem; }
+  .cred-label { font-family: 'JetBrains Mono', monospace; font-size: 0.5rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.15em; }
+  .cred-value { font-family: 'Playfair Display', serif; font-size: 0.85rem; color: var(--text); font-weight: 700; white-space: nowrap; }
+  .cred-value.highlight { color: var(--accent); }
+  .cred-sep { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
+
+  .header-actions { display: flex; gap: 0.6rem; align-items: center; flex-shrink: 0; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(0.6rem, 1.5vw, 0.7rem); letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.5rem 1rem; border-radius: 3px; cursor: pointer;
+    border: 1px solid; transition: all 0.2s; white-space: nowrap;
+  }
+  .btn-primary { background: var(--accent); color: #0a0e1a; border-color: var(--accent); font-weight: 600; }
+  .btn-primary:hover { background: var(--accent2); border-color: var(--accent2); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(245,166,35,0.3); }
+  .btn-outline { background: transparent; color: var(--accent); border-color: var(--accent); }
+  .btn-outline:hover { background: rgba(245,166,35,0.1); transform: translateY(-1px); }
+  .btn-danger { background: transparent; color: var(--major); border-color: var(--major); }
+  .btn-danger:hover { background: rgba(239,83,80,0.1); }
+  .btn-print { background: var(--surface2); color: var(--accent2); border-color: var(--accent2); }
+  .btn-print:hover { background: rgba(232,197,71,0.1); box-shadow: 0 4px 20px rgba(232,197,71,0.2); }
+
+  /* ── LAYOUT ── */
+  main { padding: clamp(1rem, 3vw, 2.5rem) clamp(1rem, 3vw, 2.5rem); max-width: 1600px; margin: 0 auto; }
+
+  /* ── STATS BAR ── */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem; margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.9rem 1rem;
+    position: relative; overflow: hidden;
+  }
+  .stat-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+  }
+  .stat-label { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.35rem; }
+  .stat-value { font-family: 'Playfair Display', serif; font-size: clamp(1.4rem, 3vw, 1.9rem); font-weight: 700; color: var(--accent); line-height: 1; }
+  .stat-sub { font-size: 0.72rem; color: var(--muted); margin-top: 0.2rem; font-style: italic; }
+
+  /* ── ADD FORM ── */
+  .form-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 2rem; overflow: hidden; }
+  .panel-header {
+    padding: 0.9rem 1.3rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none;
+  }
+  .panel-title { font-family: 'Playfair Display', serif; font-size: 1rem; color: var(--accent); display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .panel-title span { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--muted); }
+  .toggle-icon { font-size: 1.1rem; color: var(--muted); transition: transform 0.3s; flex-shrink: 0; }
+  .panel-body { padding: clamp(1rem, 2vw, 1.5rem); }
+  .panel-body.collapsed { display: none; }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(clamp(130px, 20vw, 170px), 1fr));
+    gap: 0.85rem; margin-bottom: 1.2rem;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+  label { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.13em; color: var(--muted); }
+  input, select {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); padding: 0.55rem 0.75rem; border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+    transition: border-color 0.2s, box-shadow 0.2s; outline: none;
+    -moz-appearance: none; -webkit-appearance: none; appearance: none;
+    width: 100%;
+  }
+  input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(245,166,35,0.15); }
+  .type-badge {
+    display: inline-block; padding: 0.18rem 0.55rem; border-radius: 2px;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.58rem;
+    text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
+  }
+  .type-minor { background: rgba(79,195,247,0.15); color: var(--minor); }
+  .type-major { background: rgba(239,83,80,0.15); color: var(--major); }
+
+  /* ── TABLE ── */
+  .table-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 2rem; overflow: hidden; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; min-width: 600px; }
+  th {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.6rem;
+    text-transform: uppercase; letter-spacing: 0.13em; color: var(--muted);
+    padding: 0.75rem 0.85rem; text-align: left;
+    border-bottom: 1px solid var(--border); background: var(--bg);
+    white-space: nowrap;
+  }
+  td { padding: 0.65rem 0.85rem; font-size: 0.82rem; border-bottom: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(245,166,35,0.04); }
+  .del-btn { background: none; border: none; cursor: pointer; color: var(--major); font-size: 1rem; padding: 0.1rem 0.3rem; transition: transform 0.2s; }
+  .del-btn:hover { transform: scale(1.3); }
+  .empty-state { text-align: center; padding: 3rem; color: var(--muted); font-style: italic; font-size: 0.95rem; }
+
+  /* ── CHARTS ── */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+    gap: 1.2rem; margin-bottom: 2rem;
+  }
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .chart-header {
+    padding: 0.85rem 1.2rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;
+  }
+  .chart-title { font-family: 'Playfair Display', serif; font-size: 0.95rem; color: var(--text); }
+  .chart-title em { color: var(--accent); font-style: normal; }
+  .chart-body { padding: 1rem; position: relative; min-height: 260px; }
+  canvas { max-height: 280px; width: 100% !important; }
+
+  .legend { display: flex; gap: 0.7rem; flex-wrap: wrap; }
+  .leg-item { display: flex; align-items: center; gap: 0.3rem; font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--muted); }
+  .leg-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+  /* Filter row */
+  .filter-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center; }
+  .filter-row label { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.13em; }
+  .pill-group { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .pill {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.63rem;
+    padding: 0.28rem 0.75rem; border-radius: 20px; border: 1px solid var(--border);
+    background: none; color: var(--muted); cursor: pointer; transition: all 0.2s;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .pill.active-all, .pill:hover { border-color: var(--accent); color: var(--accent); background: rgba(245,166,35,0.08); }
+  .pill.active-minor { border-color: var(--minor); color: var(--minor); background: rgba(79,195,247,0.08); }
+  .pill.active-major { border-color: var(--major); color: var(--major); background: rgba(239,83,80,0.08); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Print overlay */
+  #print-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75); z-index: 1000;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(4px); padding: 1rem;
+  }
+  #print-overlay.active { display: flex; }
+  .print-box {
+    background: var(--surface); border: 1px solid var(--accent);
+    border-radius: 10px; padding: 2rem; text-align: center;
+    width: 100%; max-width: 340px;
+  }
+  .print-box h3 { font-family: 'Playfair Display', serif; color: var(--accent); margin-bottom: 0.5rem; font-size: 1.2rem; }
+  .print-box p { color: var(--muted); font-size: 0.88rem; margin-bottom: 1.4rem; font-style: italic; }
+  .print-box .btn { display: block; width: 100%; margin-bottom: 0.6rem; padding: 0.65rem; }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 0.35rem; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #notif {
+    position: fixed; bottom: 1.2rem; right: 1.2rem;
+    background: var(--surface2); border: 1px solid var(--accent);
+    color: var(--text); padding: 0.75rem 1.1rem; border-radius: 5px;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+    transform: translateY(80px); opacity: 0; transition: all 0.3s; z-index: 999;
+    max-width: calc(100vw - 2.4rem);
+  }
+  #notif.show { transform: translateY(0); opacity: 1; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .cred-badge { gap: 0.8rem; }
+    .cred-sep { display: none; }
+  }
+  @media (max-width: 680px) {
+    header { padding: 1rem; gap: 0.75rem; }
+    .cred-badge { width: 100%; justify-content: flex-start; }
+    .header-actions { width: 100%; }
+    .header-actions .btn { flex: 1; text-align: center; }
+    main { padding: 0.85rem; }
+    .stats-bar { grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
+    .form-grid { grid-template-columns: 1fr 1fr; }
+    .charts-grid { grid-template-columns: 1fr; }
+    .chart-body { min-height: 220px; padding: 0.75rem; }
+    canvas { max-height: 240px; }
+    .panel-title span { display: none; }
+    td, th { padding: 0.55rem 0.6rem; font-size: 0.75rem; }
+  }
+  @media (max-width: 400px) {
+    .stats-bar { grid-template-columns: repeat(2, 1fr); }
+    .form-grid { grid-template-columns: 1fr; }
+    .logo-main { font-size: 1.1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo-main">{{ cfg.site.title | upper }}</div>
+    <div class="logo-sub">{{ cfg.site.tagline }}</div>
+  </div>
+
+  <div class="cred-badge">
+    <div class="cred-item">
+      <div class="cred-label">Student</div>
+      <div class="cred-value highlight">{{ cfg.student.name }}</div>
+    </div>
+    <div class="cred-sep"></div>
+    <div class="cred-item">
+      <div class="cred-label">Batch</div>
+      <div class="cred-value">{{ cfg.student.batch }}</div>
+    </div>
+    <div class="cred-sep"></div>
+    <div class="cred-item">
+      <div class="cred-label">Institute</div>
+      <div class="cred-value">{{ cfg.student.institute }}</div>
+    </div>
+  </div>
+
+  <div class="header-actions">
+    <button class="btn btn-print" onclick="openPrintOverlay()">⬇ PDF</button>
+    <button class="btn btn-outline" onclick="toggleForm()">+ Add</button>
+    <a href="/logout" class="btn btn-danger" style="text-decoration:none;">⏻ Logout</a>
+  </div>
+</header>
+
+<main>
+
+  <!-- STATS -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-card"><div class="stat-label">Total Tests</div><div class="stat-value" id="s-total">0</div><div class="stat-sub">Recorded</div></div>
+    <div class="stat-card"><div class="stat-label">Best Score</div><div class="stat-value" id="s-best">—</div><div class="stat-sub">Peak %</div></div>
+    <div class="stat-card"><div class="stat-label">Avg Score</div><div class="stat-value" id="s-avg">—</div><div class="stat-sub">All tests</div></div>
+    <div class="stat-card"><div class="stat-label">Best AIR</div><div class="stat-value" id="s-air">—</div><div class="stat-sub">All India</div></div>
+    <div class="stat-card"><div class="stat-label">Best Batch</div><div class="stat-value" id="s-batch">—</div><div class="stat-sub">Rank</div></div>
+    <div class="stat-card"><div class="stat-label">Minor</div><div class="stat-value" id="s-minor">0</div><div class="stat-sub">Tests</div></div>
+    <div class="stat-card"><div class="stat-label">Major</div><div class="stat-value" id="s-major">0</div><div class="stat-sub">Tests</div></div>
+  </div>
+
+  <!-- ADD FORM -->
+  <div class="form-panel" id="formPanel">
+    <div class="panel-header" onclick="toggleForm()">
+      <div class="panel-title">Add Test Result <span>— Fill all fields below</span></div>
+      <div class="toggle-icon" id="formIcon">▾</div>
+    </div>
+    <div class="panel-body" id="formBody">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Test Name</label>
+          <input type="text" id="f-name" placeholder="e.g. JEE Mock #4"/>
+        </div>
+        <div class="form-group">
+          <label>Test Type</label>
+          <select id="f-type">
+            <option value="minor">Minor</option>
+            <option value="major">Major</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="f-date"/>
+        </div>
+        <div class="form-group">
+          <label>Marks Obtained</label>
+          <input type="number" id="f-marks" placeholder="e.g. 245" min="0"/>
+        </div>
+        <div class="form-group">
+          <label>Total Marks</label>
+          <input type="number" id="f-total" placeholder="e.g. 300" min="1"/>
+        </div>
+        <div class="form-group">
+          <label>Batch Rank</label>
+          <input type="number" id="f-batch" placeholder="e.g. 12" min="1"/>
+        </div>
+        <div class="form-group">
+          <label>Centre Rank</label>
+          <input type="number" id="f-centre" placeholder="e.g. 34" min="1"/>
+        </div>
+        <div class="form-group">
+          <label>AIR (All India)</label>
+          <input type="number" id="f-air" placeholder="e.g. 580" min="1"/>
+        </div>
+        <div class="form-group">
+          <label>Subject / Notes</label>
+          <input type="text" id="f-notes" placeholder="e.g. Physics+Chem"/>
+        </div>
+      </div>
+      <div style="display:flex; gap:0.65rem; flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="addEntry()">Add Entry</button>
+        <button class="btn btn-outline" onclick="clearForm()">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FILTER ROW -->
+  <div class="filter-row">
+    <label>Filter:</label>
+    <div class="pill-group">
+      <button class="pill active-all" id="pill-all" onclick="setFilter('all')">All</button>
+      <button class="pill" id="pill-minor" onclick="setFilter('minor')">Minor</button>
+      <button class="pill" id="pill-major" onclick="setFilter('major')">Major</button>
+    </div>
+  </div>
+
+  <!-- CHARTS GRID -->
+  <div class="charts-grid" id="chartsGrid">
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Batch Rank <em>vs</em> Marks</div>
+        <div class="legend">
+          <div class="leg-item"><div class="leg-dot" style="background:var(--minor)"></div>Minor</div>
+          <div class="leg-item"><div class="leg-dot" style="background:var(--major)"></div>Major</div>
+        </div>
+      </div>
+      <div class="chart-body"><canvas id="chart-batch"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Centre Rank <em>vs</em> Marks</div>
+        <div class="legend">
+          <div class="leg-item"><div class="leg-dot" style="background:var(--minor)"></div>Minor</div>
+          <div class="leg-item"><div class="leg-dot" style="background:var(--major)"></div>Major</div>
+        </div>
+      </div>
+      <div class="chart-body"><canvas id="chart-centre"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">AIR <em>vs</em> Marks</div>
+        <div class="legend">
+          <div class="leg-item"><div class="leg-dot" style="background:var(--minor)"></div>Minor</div>
+          <div class="leg-item"><div class="leg-dot" style="background:var(--major)"></div>Major</div>
+        </div>
+      </div>
+      <div class="chart-body"><canvas id="chart-air"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Marks <em>by</em> Test</div>
+        <div class="legend">
+          <div class="leg-item"><div class="leg-dot" style="background:var(--minor)"></div>Minor</div>
+          <div class="leg-item"><div class="leg-dot" style="background:var(--major)"></div>Major</div>
+        </div>
+      </div>
+      <div class="chart-body"><canvas id="chart-bar"></canvas></div>
+    </div>
+    <div class="chart-card" style="grid-column: 1 / -1;">
+      <div class="chart-header">
+        <div class="chart-title">Score <em>Progress</em> Over Time</div>
+        <div class="legend">
+          <div class="leg-item"><div class="leg-dot" style="background:var(--minor)"></div>Minor %</div>
+          <div class="leg-item"><div class="leg-dot" style="background:var(--major)"></div>Major %</div>
+        </div>
+      </div>
+      <div class="chart-body" style="min-height:200px;"><canvas id="chart-trend" style="max-height:200px;"></canvas></div>
+    </div>
+  </div>
+
+  <!-- DATA TABLE -->
+  <div class="table-panel">
+    <div class="panel-header" style="cursor:default;">
+      <div class="panel-title">All Records <span id="record-count">— 0 entries</span></div>
+      <button class="btn btn-danger" onclick="if(confirm('Clear ALL data?')){clearAll();}">Clear All</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Test Name</th><th>Type</th><th>Date</th>
+            <th>Marks</th><th>Total</th><th>%</th>
+            <th>Batch Rank</th><th>Centre Rank</th><th>AIR</th><th>Notes</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr><td colspan="12" class="empty-state">No entries yet — add your first test result above.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- PRINT OVERLAY -->
+<div id="print-overlay">
+  <div class="print-box">
+    <h3>Export Report</h3>
+    <p>Download a formatted PDF of your performance dashboard.</p>
+    <button class="btn btn-primary" onclick="exportPDF()">⬇ Download PDF</button>
+    <button class="btn btn-outline" onclick="window.print()">🖨 Print Page</button>
+    <button class="btn btn-danger" onclick="closePrintOverlay()" style="margin-top:0.4rem;">Cancel</button>
+    <div id="export-status" style="margin-top:1rem; color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:0.68rem; min-height:1.2em;"></div>
+  </div>
+</div>
+
+<div id="notif"></div>
+
+<script>
+// ── API helpers ──────────────────────────────────────────────────────────────
+async function apiFetch(url, options={}) {
+  const res = await fetch(url, { headers: {'Content-Type':'application/json'}, ...options });
+  if (!res.ok) { const t = await res.text(); throw new Error(t); }
+  return res.json();
+}
+async function apiGetAll()       { return apiFetch('/api/entries'); }
+async function apiAdd(entry)     { return apiFetch('/api/entries', { method:'POST', body:JSON.stringify(entry) }); }
+async function apiDelete(id)     { return apiFetch(`/api/entries/${id}`, { method:'DELETE' }); }
+async function apiDeleteAll()    { return apiFetch('/api/entries/all', { method:'DELETE' }); }
+
+// ── State ────────────────────────────────────────────────────────────────────
+let allData = [];
+let filter = 'all';
+let charts = {};
+
+document.addEventListener('DOMContentLoaded', async () => {
+  document.getElementById('f-date').valueAsDate = new Date();
+  allData = await apiGetAll();
+  render();
+});
+
+function setFilter(f) {
+  filter = f;
+  ['all','minor','major'].forEach(k => {
+    const p = document.getElementById('pill-'+k);
+    p.className = 'pill' + (k===f?' active-'+k:'');
+  });
+  render();
+}
+
+function filteredData() { return filter==='all' ? allData : allData.filter(d=>d.type===filter); }
+
+function toggleForm() {
+  const body = document.getElementById('formBody');
+  const icon = document.getElementById('formIcon');
+  icon.textContent = body.classList.toggle('collapsed') ? '▸' : '▾';
+}
+
+function clearForm() {
+  ['f-name','f-marks','f-total','f-batch','f-centre','f-air','f-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-type').value='minor';
+  document.getElementById('f-date').valueAsDate=new Date();
+}
+
+async function addEntry() {
+  const name  = document.getElementById('f-name').value.trim();
+  const type  = document.getElementById('f-type').value;
+  const date  = document.getElementById('f-date').value;
+  const marks = parseFloat(document.getElementById('f-marks').value);
+  const total = parseFloat(document.getElementById('f-total').value);
+  const batch = parseInt(document.getElementById('f-batch').value)||null;
+  const centre= parseInt(document.getElementById('f-centre').value)||null;
+  const air   = parseInt(document.getElementById('f-air').value)||null;
+  const notes = document.getElementById('f-notes').value.trim();
+  if (!name)              { notify('⚠ Test name required'); return; }
+  if (isNaN(marks))       { notify('⚠ Marks required'); return; }
+  if (isNaN(total)||total<1) { notify('⚠ Total marks required'); return; }
+  try {
+    const entry = await apiAdd({ name,type,date,marks,total,batch,centre,air,notes });
+    allData.push(entry);
+    clearForm(); render(); notify('✓ Added: '+name);
+  } catch(e) { notify('⚠ Save failed: '+e.message); }
+}
+
+async function deleteEntry(id) {
+  try {
+    await apiDelete(id);
+    allData = allData.filter(d=>d.id!==id);
+    render(); notify('Entry removed');
+  } catch(e) { notify('⚠ Delete failed: '+e.message); }
+}
+async function clearAll() {
+  try {
+    await apiDeleteAll();
+    allData=[]; render(); notify('All data cleared');
+  } catch(e) { notify('⚠ Clear failed: '+e.message); }
+}
+
+function render() { renderStats(); renderTable(); renderCharts(); }
+
+function renderStats() {
+  const d=allData;
+  document.getElementById('s-total').textContent=d.length;
+  document.getElementById('s-minor').textContent=d.filter(x=>x.type==='minor').length;
+  document.getElementById('s-major').textContent=d.filter(x=>x.type==='major').length;
+  document.getElementById('record-count').textContent=`— ${d.length} entr${d.length===1?'y':'ies'}`;
+  if (!d.length) { ['s-best','s-avg','s-air','s-batch'].forEach(id=>document.getElementById(id).textContent='—'); return; }
+  const pcts=d.map(x=>x.marks/x.total*100);
+  document.getElementById('s-best').textContent=Math.max(...pcts).toFixed(1)+'%';
+  document.getElementById('s-avg').textContent=(pcts.reduce((a,b)=>a+b,0)/pcts.length).toFixed(1)+'%';
+  const airs=d.filter(x=>x.air).map(x=>x.air);
+  document.getElementById('s-air').textContent=airs.length?Math.min(...airs):'—';
+  const brs=d.filter(x=>x.batch).map(x=>x.batch);
+  document.getElementById('s-batch').textContent=brs.length?Math.min(...brs):'—';
+}
+
+function renderTable() {
+  const fd=filteredData(); const tbody=document.getElementById('tableBody');
+  if (!fd.length) { tbody.innerHTML=`<tr><td colspan="12" class="empty-state">No entries for this filter.</td></tr>`; return; }
+  tbody.innerHTML=fd.slice().reverse().map((d,i)=>{
+    const pct=(d.marks/d.total*100).toFixed(1);
+    return `<tr>
+      <td style="color:var(--muted)">${fd.length-i}</td>
+      <td style="color:var(--text)">${d.name}</td>
+      <td><span class="type-badge type-${d.type}">${d.type}</span></td>
+      <td>${d.date||'—'}</td>
+      <td style="color:var(--accent2);font-weight:600">${d.marks}</td>
+      <td>${d.total}</td><td>${pct}%</td>
+      <td>${d.batch||'—'}</td><td>${d.centre||'—'}</td><td>${d.air||'—'}</td>
+      <td style="color:var(--muted)">${d.notes||'—'}</td>
+      <td><button class="del-btn" onclick="deleteEntry(${d.id})" title="Delete">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Colors (rgba so opacity works correctly in all browsers) ──
+const C = {
+  minor:       'rgba(79,195,247,1)',
+  minorFill:   'rgba(79,195,247,0.55)',
+  minorArea:   'rgba(79,195,247,0.15)',
+  major:       'rgba(239,83,80,1)',
+  majorFill:   'rgba(239,83,80,0.55)',
+  majorArea:   'rgba(239,83,80,0.15)',
+  accent:      'rgba(245,166,35,1)',
+  grid:        'rgba(255,255,255,0.06)',
+  text:        '#6b7a99',
+  tooltip_bg:  '#1a2235',
+  tooltip_bd:  '#1e2d45',
+};
+
+function makeScatterDS(label, color, fill, data) {
+  return { label, data, backgroundColor: fill, borderColor: color, pointRadius: 7, pointHoverRadius: 11, borderWidth: 2 };
+}
+
+function baseOpts(xLabel, yLabel) {
+  return {
+    responsive: true, maintainAspectRatio: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: C.tooltip_bg, borderColor: C.tooltip_bd, borderWidth: 1,
+        titleColor: '#f5a623', bodyColor: '#e8dcc8',
+        titleFont: { family: "'JetBrains Mono'", size: 10 },
+        bodyFont:  { family: "'Crimson Pro'", size: 12 },
+      }
+    },
+    scales: {
+      x: { title: { display: true, text: xLabel, color: C.text, font: { family: "'JetBrains Mono'", size: 9 } },
+           ticks: { color: C.text, font: { family: "'JetBrains Mono'", size: 9 } }, grid: { color: C.grid } },
+      y: { title: { display: true, text: yLabel, color: C.text, font: { family: "'JetBrains Mono'", size: 9 } },
+           ticks: { color: C.text, font: { family: "'JetBrains Mono'", size: 9 } }, grid: { color: C.grid } }
+    }
+  };
+}
+
+function destroyChart(key) { if (charts[key]) { charts[key].destroy(); delete charts[key]; } }
+
+function renderCharts() {
+  // scatter charts always show both minor+major split from full allData,
+  // filtered only when a specific type pill is active
+  const fd       = filteredData();           // respects filter pill
+  const minorD   = fd.filter(d => d.type === 'minor');
+  const majorD   = fd.filter(d => d.type === 'major');
+
+  const scatterLabel = ctx => {
+    const r = ctx.raw;
+    return `  ${r.name || ctx.dataset.label}: Marks ${r.x}, Rank/AIR ${r.y}`;
+  };
+
+  // ── Helper: build scatter chart ──
+  function makeScatter(canvasId, yField, yLabel) {
+    destroyChart(canvasId);
+    const opts = baseOpts('Marks', yLabel);
+    opts.plugins.tooltip.callbacks = { label: scatterLabel };
+    charts[canvasId] = new Chart(document.getElementById(canvasId), {
+      type: 'scatter',
+      data: {
+        datasets: [
+          makeScatterDS('Minor', C.minor, C.minorFill,
+            minorD.filter(d => d[yField]).map(d => ({ x: d.marks, y: d[yField], name: d.name }))),
+          makeScatterDS('Major', C.major, C.majorFill,
+            majorD.filter(d => d[yField]).map(d => ({ x: d.marks, y: d[yField], name: d.name }))),
+        ]
+      },
+      options: opts
+    });
+  }
+
+  makeScatter('chart-batch',  'batch',  'Batch Rank');
+  makeScatter('chart-centre', 'centre', 'Centre Rank');
+  makeScatter('chart-air',    'air',    'All India Rank');
+
+  // ── Bar: Marks by Test ──
+  destroyChart('chart-bar');
+  const barOpts = baseOpts('Test', 'Marks');
+  barOpts.plugins.tooltip.callbacks = {
+    label: ctx => {
+      const d = fd[ctx.dataIndex];
+      return `  ${d.marks}/${d.total} (${(d.marks/d.total*100).toFixed(1)}%)`;
+    }
+  };
+  charts['chart-bar'] = new Chart(document.getElementById('chart-bar'), {
+    type: 'bar',
+    data: {
+      labels: fd.map(d => d.name + (d.type === 'minor' ? ' (m)' : ' (M)')),
+      datasets: [{
+        label: 'Marks',
+        data:            fd.map(d => d.marks),
+        backgroundColor: fd.map(d => d.type === 'minor' ? C.minorFill : C.majorFill),
+        borderColor:     fd.map(d => d.type === 'minor' ? C.minor     : C.major),
+        borderWidth: 1.5, borderRadius: 3,
+      }]
+    },
+    options: barOpts
+  });
+
+  // ── Trend line (always uses full allData so history is visible) ──
+  destroyChart('chart-trend');
+  const sorted = [...allData].sort((a, b) => new Date(a.date) - new Date(b.date));
+  charts['chart-trend'] = new Chart(document.getElementById('chart-trend'), {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'Minor %',
+          data: sorted.filter(d => d.type === 'minor').map(d => ({
+            x: d.date || d.name, y: +(d.marks/d.total*100).toFixed(1), name: d.name
+          })),
+          borderColor: C.minor, backgroundColor: C.minorArea,
+          pointBackgroundColor: C.minor, pointRadius: 5, borderWidth: 2, fill: true, tension: 0.35,
+        },
+        {
+          label: 'Major %',
+          data: sorted.filter(d => d.type === 'major').map(d => ({
+            x: d.date || d.name, y: +(d.marks/d.total*100).toFixed(1), name: d.name
+          })),
+          borderColor: C.major, backgroundColor: C.majorArea,
+          pointBackgroundColor: C.major, pointRadius: 5, borderWidth: 2, fill: true, tension: 0.35,
+        },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { display: true, labels: { color: C.text, font: { family: "'JetBrains Mono'", size: 9 }, boxWidth: 10 } },
+        tooltip: {
+          backgroundColor: C.tooltip_bg, borderColor: C.tooltip_bd, borderWidth: 1,
+          titleColor: '#f5a623', bodyColor: '#e8dcc8',
+          titleFont: { family: "'JetBrains Mono'" },
+          callbacks: { label: ctx => `  ${ctx.raw.name || ctx.dataset.label}: ${ctx.raw.y}%` }
+        }
+      },
+      scales: {
+        x: { ticks: { color: C.text, font: { family: "'JetBrains Mono'", size: 9 }, maxTicksLimit: 10 }, grid: { color: C.grid } },
+        y: { title: { display: true, text: 'Score %', color: C.text, font: { family: "'JetBrains Mono'", size: 9 } },
+             ticks: { color: C.text, font: { family: "'JetBrains Mono'", size: 9 }, callback: v => v + '%' }, grid: { color: C.grid } }
+      }
+    }
+  });
+}
+
+function openPrintOverlay() { document.getElementById('print-overlay').classList.add('active'); }
+function closePrintOverlay() { document.getElementById('print-overlay').classList.remove('active'); document.getElementById('export-status').textContent=''; }
+
+async function exportPDF() {
+  const status=document.getElementById('export-status');
+  status.innerHTML='<span class="spinner"></span> Generating PDF…';
+  try {
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const W=297,H=210;
+    const creds={name:'{{ cfg.student.name }}',batch:'{{ cfg.student.batch }}',institute:'{{ cfg.student.institute }}'};
+
+    // Cover
+    pdf.setFillColor(10,14,26); pdf.rect(0,0,W,H,'F');
+    pdf.setDrawColor(245,166,35); pdf.setLineWidth(0.5); pdf.rect(8,8,W-16,H-16,'S');
+    pdf.setFont('helvetica','bold'); pdf.setFontSize(34); pdf.setTextColor(245,166,35);
+    pdf.text('TEST EVALUATIONS', W/2, 68, {align:'center'});
+    pdf.setFontSize(10); pdf.setTextColor(107,122,153);
+    pdf.text('PERFORMANCE INTELLIGENCE REPORT', W/2, 79, {align:'center'});
+    pdf.setLineWidth(0.3); pdf.line(W/2-50,85,W/2+50,85);
+    pdf.setFontSize(11); pdf.setTextColor(232,220,200);
+    pdf.text(creds.name, W/2, 96, {align:'center'});
+    pdf.setFontSize(8); pdf.setTextColor(107,122,153);
+    pdf.text(`${creds.batch}  ·  ${creds.institute}`, W/2, 105, {align:'center'});
+    const d=allData;
+    pdf.setFontSize(9); pdf.setTextColor(200,190,170);
+    pdf.text(`Total Tests: ${d.length}   |   Minor: ${d.filter(x=>x.type==='minor').length}   |   Major: ${d.filter(x=>x.type==='major').length}`, W/2, 120, {align:'center'});
+    const today=new Date().toLocaleDateString('en-IN',{year:'numeric',month:'long',day:'numeric'});
+    pdf.setFontSize(7); pdf.setTextColor(80,95,120);
+    pdf.text(`Generated: ${today}`, W/2, 130, {align:'center'});
+
+    // Stats page
+    if (d.length) {
+      pdf.addPage(); pdf.setFillColor(10,14,26); pdf.rect(0,0,W,H,'F');
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(13); pdf.setTextColor(245,166,35);
+      pdf.text('SUMMARY STATISTICS', 15, 18);
+      pdf.setFontSize(8); pdf.setTextColor(107,122,153);
+      pdf.text(`${creds.name}  ·  ${creds.batch}  ·  ${creds.institute}`, W-15, 18, {align:'right'});
+      pdf.setLineWidth(0.3); pdf.setDrawColor(245,166,35); pdf.line(15,21,W-15,21);
+      const pcts=d.map(x=>x.marks/x.total*100);
+      const stats=[
+        ['Best Score',Math.max(...pcts).toFixed(1)+'%'],
+        ['Average Score',(pcts.reduce((a,b)=>a+b,0)/pcts.length).toFixed(1)+'%'],
+        ['Best AIR',(()=>{const a=d.filter(x=>x.air).map(x=>x.air);return a.length?Math.min(...a):'—'})()],
+        ['Best Batch Rank',(()=>{const b=d.filter(x=>x.batch).map(x=>x.batch);return b.length?Math.min(...b):'—'})()],
+        ['Minor Tests',d.filter(x=>x.type==='minor').length],
+        ['Major Tests',d.filter(x=>x.type==='major').length],
+      ];
+      stats.forEach(([label,val],i)=>{
+        const col=i<3?15:W/2+5; const row=38+(i%3)*22;
+        pdf.setFontSize(7); pdf.setTextColor(107,122,153); pdf.text(label.toUpperCase(),col,row);
+        pdf.setFontSize(20); pdf.setTextColor(245,166,35); pdf.text(String(val),col,row+11);
+      });
+    }
+
+    // Chart pages
+    const chartDefs=[
+      {id:'chart-batch',title:'Batch Rank vs Marks'},{id:'chart-centre',title:'Centre Rank vs Marks'},
+      {id:'chart-air',title:'AIR vs Marks'},{id:'chart-bar',title:'Marks by Test'},{id:'chart-trend',title:'Score Progress Over Time'},
+    ];
+    for (const {id,title} of chartDefs) {
+      const canvas=document.getElementById(id); if(!canvas) continue;
+      status.innerHTML=`<span class="spinner"></span> ${title}…`;
+      const imgData=canvas.toDataURL('image/png',1.0);
+      pdf.addPage(); pdf.setFillColor(10,14,26); pdf.rect(0,0,W,H,'F');
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(12); pdf.setTextColor(245,166,35);
+      pdf.text(title.toUpperCase(),15,16);
+      pdf.setFontSize(7); pdf.setTextColor(107,122,153);
+      pdf.text(`${creds.name}  ·  ${creds.batch}  ·  ${creds.institute}`,W-15,16,{align:'right'});
+      pdf.setLineWidth(0.3); pdf.setDrawColor(245,166,35); pdf.line(15,19,W-15,19);
+      const ch=canvas.height,cw=canvas.width,ratio=cw/ch,imgW=W-30,imgH=imgW/ratio;
+      pdf.addImage(imgData,'PNG',15,24,Math.min(imgW,W-30),Math.min(imgH,H-34));
+    }
+
+    // Table page
+    if (d.length) {
+      pdf.addPage(); pdf.setFillColor(10,14,26); pdf.rect(0,0,W,H,'F');
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(12); pdf.setTextColor(245,166,35);
+      pdf.text('ALL TEST RECORDS',15,16);
+      pdf.setFontSize(7); pdf.setTextColor(107,122,153);
+      pdf.text(`${creds.name}  ·  ${creds.batch}  ·  ${creds.institute}`,W-15,16,{align:'right'});
+      pdf.setLineWidth(0.3); pdf.setDrawColor(245,166,35); pdf.line(15,19,W-15,19);
+      const headers=['Test Name','Type','Date','Marks','Total','%','Batch','Centre','AIR'];
+      const colW=[60,18,28,18,18,16,18,18,16]; let x=15,y=30;
+      pdf.setFontSize(7); pdf.setTextColor(107,122,153);
+      headers.forEach((h,i)=>{pdf.text(h,x,y);x+=colW[i];});
+      pdf.setDrawColor(30,45,69); pdf.setLineWidth(0.2); pdf.line(15,y+2,W-15,y+2);
+      y+=8;
+      d.forEach((row,ri)=>{
+        if(y>H-15){pdf.addPage();pdf.setFillColor(10,14,26);pdf.rect(0,0,W,H,'F');y=20;}
+        pdf.setFontSize(7.5); pdf.setTextColor(ri%2===0?232:200,ri%2===0?220:200,ri%2===0?200:180);
+        const cols=[row.name.substring(0,28),row.type,row.date||'—',String(row.marks),String(row.total),(row.marks/row.total*100).toFixed(1)+'%',String(row.batch||'—'),String(row.centre||'—'),String(row.air||'—')];
+        x=15; cols.forEach((v,i)=>{pdf.text(v,x,y);x+=colW[i];}); y+=7;
+      });
+    }
+
+    pdf.save('TestEvaluations_{{ cfg.student.name | replace(' ','') }}.pdf');
+    status.innerHTML='✓ Downloaded!';
+    setTimeout(closePrintOverlay,1300);
+  } catch(e) { status.innerHTML='⚠ '+e.message; console.error(e); }
+}
+
+let notifTimer;
+function notify(msg) {
+  const el=document.getElementById('notif');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(notifTimer); notifTimer=setTimeout(()=>el.classList.remove('show'),2800);
+}
+document.getElementById('print-overlay').addEventListener('click',function(e){if(e.target===this)closePrintOverlay();});
+</script>
+</body>
+</html>
